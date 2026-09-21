@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mark-XLVII — Gemini Live Assistant</title>
+  <style>
+    :root{color-scheme:dark;--bg:#071018;--panel:#0d1c27;--line:#1d3c4a;--text:#e6f7fb;--muted:#9bb6bd;--accent:#00d4ff;--accent2:#7ef0c1}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#123846 0,#071018 45%);color:var(--text);font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
+    main{max-width:980px;margin:0 auto;padding:72px 24px 64px}.eyebrow{color:var(--accent);font:700 12px/1 monospace;letter-spacing:.2em;text-transform:uppercase}.hero{max-width:760px}.hero h1{font-size:clamp(42px,8vw,78px);line-height:1;margin:18px 0}.hero h1 span{color:var(--accent)}.hero p{font-size:20px;color:var(--muted);max-width:700px}.actions{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 48px}.button{display:inline-block;padding:12px 18px;border:1px solid var(--line);border-radius:8px;color:var(--text);text-decoration:none;background:var(--panel)}.button.primary{background:var(--accent);border-color:var(--accent);color:#00141b;font-weight:700}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.card{padding:22px;background:rgba(13,28,39,.82);border:1px solid var(--line);border-radius:12px}.card h2{font-size:17px;margin:0 0 8px}.card p{color:var(--muted);margin:0}.notice{margin-top:28px;padding:18px 20px;border-left:3px solid var(--accent2);background:rgba(126,240,193,.07);color:var(--muted)}.notice strong{color:var(--text)}footer{margin-top:54px;color:var(--muted);font-size:13px}code{color:var(--accent2)}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="eyebrow">Gemini Live · Cross-platform · Voice AI</div>
+      <h1>Meet <span>Mark-XLVII</span>.</h1>
+      <p>A real-time personal AI assistant that can hear, see, understand, and control your digital workspace.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/Onielq/Mark-XLVII">View source on GitHub</a>
+        <a class="button" href="REMOTE_SETUP.md">Read setup guide</a>
+      </div>
+    </section>
+    <section class="grid">
+      <article class="card"><h2>Real-time voice</h2><p>Gemini Live audio conversations with local microphone and speaker support.</p></article>
+      <article class="card"><h2>Remote dashboard</h2><p>Authenticated text commands, file sharing, status updates, and browser microphone transport.</p></article>
+      <article class="card"><h2>Desktop awareness</h2><p>Screen and camera vision, system telemetry, browser control, and OS-native actions.</p></article>
+    </section>
+    <div class="notice"><strong>Hosting note:</strong> GitHub Pages hosts this permanent documentation site. The Python runtime, Gemini Live WebSocket, desktop controls, and physical audio devices must run on your own computer or a persistent server.</div>
+    <footer>Mark-XLVII · Configure your Gemini API key locally; never commit it to GitHub.</footer>
+  </main>
+</body>
+</html>
