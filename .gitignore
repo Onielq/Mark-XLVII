@@ -10,6 +10,9 @@ env/
 .env
 .env.local
 .env.*
+*.log
+*.pid
+uploads/
 
 # User config and certs containing secrets
 config/certs/*.key

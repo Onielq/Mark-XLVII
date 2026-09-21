@@ -11,6 +11,7 @@ Install deps:  pip install fastapi "uvicorn[standard]" cryptography
 import asyncio
 import base64
 import hashlib
+import os
 import re
 import secrets
 import socket
@@ -382,6 +383,9 @@ class DashboardServer:
         self._device_sessions: dict[str, dict] = {}  # device_token → {session_key}
         self._phone_audio_queue: asyncio.Queue    = asyncio.Queue(maxsize=200)
         self._uploads_dir                 = UPLOADS_DIR
+        configured_key = os.environ.get("JARVIS_REMOTE_KEY", "").strip().upper()
+        if configured_key:
+            self._pending_keys[configured_key] = time.time() + 86_400
         self._login_html                  = _read("login.html")
         self._app_html                    = _read("app.html")
         self.app                          = self._build_app()
@@ -484,7 +488,8 @@ class DashboardServer:
             entered = str(body.get("pin", "")).strip().upper()
             now     = time.time()
             if entered in self._pending_keys and self._pending_keys[entered] > now:
-                del self._pending_keys[entered]          # one-time use
+                if entered != os.environ.get("JARVIS_REMOTE_KEY", "").strip().upper():
+                    del self._pending_keys[entered]      # generated keys are one-time
                 tok = secrets.token_urlsafe(32)
                 self._tokens.add(tok)
                 self._token_keys[tok] = entered
@@ -515,7 +520,8 @@ class DashboardServer:
 <p>Press <strong style="color:#dde3ed">Remote Control</strong> in JARVIS to get a new QR code.</p>
 </div></body></html>""")
 
-            del self._pending_keys[key]
+            if key != os.environ.get("JARVIS_REMOTE_KEY", "").strip().upper():
+                del self._pending_keys[key]
             tok     = secrets.token_urlsafe(32)
             dev_tok = secrets.token_urlsafe(32)
             self._tokens.add(tok)
