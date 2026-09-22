@@ -21,10 +21,12 @@ import threading
 import time
 import json
 import sys
+import os
 import traceback
 from datetime import datetime
 from pathlib import Path
 
+import requests
 import sounddevice as sd
 from google import genai
 from google.genai import types
@@ -842,8 +844,12 @@ class JarvisLive:
                 while True:
                     await asyncio.sleep(0.1)
         except Exception as e:
-            print(f"[JARVIS] ❌ Mic: {e}")
-            raise
+            # A headless host may have no PortAudio input device. Keep the
+            # Gemini session and remote phone microphone alive instead of
+            # cancelling the whole TaskGroup.
+            print(f"[JARVIS] ⚠️ Mic unavailable; remote audio can still be used: {e}")
+            while True:
+                await asyncio.sleep(5)
 
     async def _receive_audio(self):
         print("[JARVIS] 👂 Recv started")
@@ -962,13 +968,20 @@ class JarvisLive:
     async def _play_audio(self):
         print("[JARVIS] 🔊 Play started")
 
-        stream = sd.RawOutputStream(
-            samplerate=RECEIVE_SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="int16",
-            blocksize=CHUNK_SIZE,
-        )
-        stream.start()
+        stream = None
+        try:
+            stream = sd.RawOutputStream(
+                samplerate=RECEIVE_SAMPLE_RATE,
+                channels=CHANNELS,
+                dtype="int16",
+                blocksize=CHUNK_SIZE,
+            )
+            stream.start()
+            print("[JARVIS] 🔊 Speaker stream open")
+        except Exception as e:
+            # Continue draining Gemini audio so a missing speaker does not
+            # terminate the session or remote dashboard connection.
+            print(f"[JARVIS] ⚠️ Speaker unavailable; audio will be discarded: {e}")
 
         try:
             while True:
@@ -988,7 +1001,8 @@ class JarvisLive:
                     continue
                 self.set_speaking(True)
                 try:
-                    await asyncio.to_thread(stream.write, chunk)
+                    if stream is not None:
+                        await asyncio.to_thread(stream.write, chunk)
                 except (RuntimeError, asyncio.CancelledError):
                     break   # executor shutting down — exit cleanly
         except Exception as e:
@@ -996,8 +1010,9 @@ class JarvisLive:
             raise
         finally:
             self.set_speaking(False)
-            stream.stop()
-            stream.close()
+            if stream is not None:
+                stream.stop()
+                stream.close()
 
     # ── Morning briefing ────────────────────────────────────────────────────────
 
@@ -1151,6 +1166,57 @@ class JarvisLive:
         self.ui.write_log("SYS: Phone connected via Remote Dashboard.")
         self.ui.notify_phone_connected()
 
+    async def _dashboard_text_fallback(self, text: str) -> bool:
+        """Answer a dashboard command with an optional OpenAI-compatible text model.
+
+        This is deliberately opt-in: Gemini Live remains the primary voice path,
+        while a configured secondary endpoint can keep text commands useful when
+        Gemini quota or host audio is unavailable.
+        """
+        try:
+            with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            fb = cfg.get("fallback_llm") or {}
+            url = (fb.get("url") or os.environ.get("MARK_TEXT_FALLBACK_URL", "")).rstrip("/")
+            model = fb.get("model") or os.environ.get("MARK_TEXT_FALLBACK_MODEL", "")
+            key = fb.get("api_key") or os.environ.get(
+                fb.get("api_key_env", "MARK_TEXT_FALLBACK_API_KEY"), ""
+            )
+            if not url or not model:
+                return False
+
+            headers = {"Content-Type": "application/json"}
+            if key:
+                headers["Authorization"] = f"Bearer {key}"
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": "You are JARVIS. Be concise and helpful."},
+                    {"role": "user", "content": text},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 300,
+            }
+            resp = await asyncio.to_thread(
+                requests.post, f"{url}/v1/chat/completions",
+                json=payload, headers=headers, timeout=45,
+            )
+            resp.raise_for_status()
+            answer = (resp.json().get("choices", [{}])[0]
+                      .get("message", {}).get("content", "").strip())
+            if not answer:
+                return False
+            self.ui.write_log(f"Jarvis [fallback]: {answer}")
+            if self._dashboard:
+                await self._dashboard.broadcast({
+                    "type": "log", "speaker": "jarvis", "text": answer,
+                    "ts": datetime.now().isoformat(),
+                })
+            return True
+        except Exception as e:
+            print(f"[Dashboard] Text fallback unavailable: {e}")
+            return False
+
     # ── dashboard command relay ─────────────────────────────────────────────
 
     async def _process_dashboard_commands(self) -> None:
@@ -1173,7 +1239,8 @@ class JarvisLive:
                     )
                     self.ui.write_log(f"[Web]: {text}")
                 else:
-                    print(f"[Dashboard] Dropped command (no session): {text}")
+                    if not await self._dashboard_text_fallback(text):
+                        print(f"[Dashboard] Dropped command (no session): {text}")
             except asyncio.TimeoutError:
                 pass
             except Exception as e:
@@ -1270,6 +1337,24 @@ class JarvisLive:
                         await asyncio.sleep(1)
                     print("[JARVIS] New API key saved — reconnecting...")
                     _conn_backoff = 3
+                    continue
+
+                # Quota/billing failures will not recover by reconnecting.
+                # Back off for five minutes and keep the dashboard usable.
+                if any(k in err_str.lower() for k in (
+                    "quota", "billing", "resource exhausted", "exceeded your current quota",
+                )):
+                    self.ui.write_log(
+                        "ERR: Gemini quota/billing unavailable — dashboard text fallback remains available."
+                    )
+                    self.ui.set_state("SLEEPING")
+                    self._conn_backoff = 300
+                    if self._dashboard:
+                        await self._dashboard.broadcast({
+                            "type": "sys",
+                            "text": "Gemini quota unavailable; configure a text fallback or restore Gemini quota.",
+                        })
+                    await asyncio.sleep(self._conn_backoff)
                     continue
 
                 # Network / timeout errors — log clearly and back off

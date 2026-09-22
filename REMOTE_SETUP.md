@@ -96,6 +96,18 @@ For a quick audio-library check:
 
 The default TTS configuration is `edgetts` with the `en-US-GuyNeural` voice. The TTS factory also supports `kokoro` and `elevenlabs` when their corresponding configuration and dependencies are supplied, but these are not needed for the default setup.
 
+### Optional text fallback when Gemini Live is unavailable
+
+If Gemini Live is out of quota or the host has no local audio device, dashboard text commands can use an OpenAI-compatible secondary model. Keep the fallback credential in an environment variable rather than committing it:
+
+```bash
+export MARK_TEXT_FALLBACK_URL="https://your-openai-compatible-endpoint/v1"
+export MARK_TEXT_FALLBACK_MODEL="your-text-model"
+export MARK_TEXT_FALLBACK_API_KEY="your-secondary-api-key"
+```
+
+Launch Mark-XLVII after setting those variables. The fallback is text-only; it does not replace Gemini Live audio. A successful fallback reply confirms the dashboard and secondary provider are working even while Gemini quota is unavailable.
+
 ## 4. Use the built-in web dashboard on the local network
 
 When Mark-XLVII is running, its dashboard starts automatically on port `8000` and binds to all interfaces. In the desktop UI:
